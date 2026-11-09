@@ -1,4 +1,6 @@
 """Build figures from results/*.csv (no recomputation)."""
+import json
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -7,7 +9,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-RES, FIG = ROOT / "results", ROOT / "figures"
+# optional arg: a results dir from a demo run; its figures go to <dir>/figures
+RES = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "results"
+FIG = RES / "figures" if len(sys.argv) > 1 else ROOT / "figures"
 COLORS = {"Default": "#2a78d6", "Random": "#eb6834", "TPE": "#1baf7a"}  # fixed categorical order
 INK, MUTED = "#0b0b0b", "#52514e"
 
@@ -21,17 +25,22 @@ plt.rcParams.update({
 
 def convergence(trials, s_max):
     fig, ax = plt.subplots(figsize=(7, 4))
+    lows, tops = [], []
     for m in ("Random", "TPE"):
         d = trials[trials.method == m].sort_values(["seed", "trial"])
         best = d.groupby("seed")["J"].cummax()
-        curve = best.groupby(d["trial"]).agg(["mean", "std"])
+        curve = best.groupby(d["trial"]).agg(["mean", "std"]).fillna(0)
+        curve = curve.iloc[min(2, len(curve) - 1):]  # first 2 trials: J << 0, huge std
         ax.plot(curve.index + 1, curve["mean"], color=COLORS[m], label=f"{m} (mean ± std, {d.seed.nunique()} seeds)")
         ax.fill_between(curve.index + 1, curve["mean"] - curve["std"], curve["mean"] + curve["std"], color=COLORS[m], alpha=0.15, lw=0)
+        lows.append((curve["mean"] - curve["std"]).min())
+        tops.append(curve["mean"].max())
     d0 = trials[trials.method == "Default"]
-    top = max(line.get_ydata().max() for line in ax.get_lines())
-    # Early infeasible trials have J << 0; zoom on the region where the methods actually differ.
-    ax.set_ylim(top - 0.04, top + 0.008)
-    ax.text(0.02, 0.04, f"Default RF: CV F1 = {d0.cv_f1.mean():.4f}, size = {d0.size_mb.mean():.1f} MB\n"
+    top = max(tops)
+    ax.axvline(10.5, color=MUTED, ls=":", lw=1.2)
+    ax.text(10.7, top + 0.005, "TPE starts modelling\n(trials 1–10 = same random draws)", color=MUTED, fontsize=8, va="top")
+    ax.set_ylim(min(lows) - 0.006, top + 0.011)
+    ax.text(0.98, 0.97, ha="right", va="top", s=f"Default RF: CV F1 = {d0.cv_f1.mean():.4f}, size = {d0.size_mb.mean():.1f} MB\n"
             f"→ violates S_max, J = {d0.J.mean():.2f} (off-scale)", transform=ax.transAxes,
             color=MUTED, fontsize=9)
     ax.set(xlabel="Evaluation (trial)", ylabel="Best J(x) so far  (CV F1 − size penalty)",
@@ -56,12 +65,12 @@ def tradeoff(trials, s_max):
     pf = pareto_front(trials[trials.method != "Default"])
     ax.step(pf.size_mb, pf.cv_f1, where="post", color=INK, lw=1.2, label="Pareto front (all searched x)", zorder=4)
     ax.axvline(s_max, color=MUTED, ls=":", lw=1.5)
-    ax.text(s_max, ax.get_ylim()[0], f"  S_max = {s_max} MB", color=MUTED, va="bottom", fontsize=9)
     ax.set_xscale("log")
     ax.set(xlabel="Model size (MB, log scale)", ylabel="CV F1 (train folds only)",
            title="Trade-off: detection quality vs model size")
     ax.set_ylim(bottom=max(ax.get_ylim()[0], trials.cv_f1.quantile(0.05) - 0.01))
-    ax.legend(frameon=False, loc="lower right")
+    ax.text(s_max * 1.08, ax.get_ylim()[0] + 0.002, f"S_max = {s_max} MB\n(infeasible →)", color=MUTED, fontsize=9)
+    ax.legend(frameon=False, loc="upper left")
     fig.tight_layout()
     fig.savefig(FIG / "tradeoff_pareto.png", dpi=150)
 
@@ -80,14 +89,29 @@ def test_box(final):
     fig.savefig(FIG / "test_boxplot.png", dpi=150)
 
 
+def stats(trials, final, threshold=0.94):
+    """Paired Wilcoxon (same seed) TPE vs Random, and evaluations needed to reach J >= threshold."""
+    from scipy.stats import wilcoxon
+    piv = final.pivot(index="seed", columns="method")
+    out = ({f"wilcoxon_p_{c}": float(wilcoxon(piv[c]["TPE"], piv[c]["Random"]).pvalue) for c in ("J", "test_f1")}
+           if len(piv) >= 2 else {})  # a paired test needs at least 2 seeds
+    for m in ("Random", "TPE"):
+        d = trials[trials.method == m].sort_values(["seed", "trial"])
+        hit = d[d.groupby("seed")["J"].cummax() >= threshold].groupby("seed")["trial"].min() + 1
+        out[f"{m}_evals_to_J>={threshold}"] = {"mean": float(hit.mean()), "reached_seeds": int(hit.size),
+                                               "of_seeds": int(d.seed.nunique())}
+    (RES / "stats.json").write_text(json.dumps(out, indent=2))
+    print(json.dumps(out, indent=2))
+
+
 def main():
     FIG.mkdir(exist_ok=True)
-    import json
-    s_max = json.load(open(RES / "config.json"))["s_max_mb"]
+    s_max = json.loads((RES / "config.json").read_text())["s_max_mb"]
     trials, final = pd.read_csv(RES / "trials.csv"), pd.read_csv(RES / "final.csv")
     convergence(trials, s_max)
     tradeoff(trials, s_max)
     test_box(final)
+    stats(trials, final)
     print("figures written to", FIG)
 
 

@@ -15,6 +15,7 @@ import io
 import json
 import pickle
 import time
+import warnings
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -77,14 +78,16 @@ def model_size_mb(model):
 
 
 def cv_evaluate(params, X, y, seed):
-    """Return mean CV F1 and mean model size (MB) for one configuration x."""
+    """Return mean CV F1 and the size (MB) of the model that would be deployed for x."""
     cv = StratifiedKFold(CV_FOLDS, shuffle=True, random_state=seed)
-    f1s, sizes = [], []
+    f1s = []
     for tr, va in cv.split(X, y):
         m = RandomForestClassifier(**params, n_jobs=-1, random_state=seed).fit(X[tr], y[tr])
         f1s.append(f1_score(y[va], m.predict(X[va])))
-        sizes.append(model_size_mb(m))
-    return float(np.mean(f1s)), float(np.mean(sizes))
+    # Size must be measured on the full-train refit: fold models see 2/3 of the rows, grow
+    # smaller trees, and underestimate the deployed size (first run: 30-40% of x* infeasible).
+    full = RandomForestClassifier(**params, n_jobs=-1, random_state=seed).fit(X, y)
+    return float(np.mean(f1s)), model_size_mb(full)
 
 
 def suggest(trial):
@@ -149,6 +152,8 @@ def main():
     ap.add_argument("--out", default=str(RESULTS))
     args = ap.parse_args()
     optuna.logging.set_verbosity(optuna.logging.WARNING)
+    # harmless sklearn/joblib version-mismatch warning emitted on every parallel predict
+    warnings.filterwarnings("ignore", message=".*sklearn.utils.parallel.delayed.*")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -181,10 +186,10 @@ def main():
     summary = final.groupby("method", sort=False)[cols].agg(["mean", "std"])
     summary["feasible_rate"] = final.groupby("method", sort=False)["feasible"].mean()
     summary.to_csv(out / "summary.csv")
-    json.dump({"seeds": args.seeds, "trials": args.trials, "split_seed": SPLIT_SEED, "test_size": TEST_SIZE,
+    (out / "config.json").write_text(json.dumps({"seeds": args.seeds, "trials": args.trials, "split_seed": SPLIT_SEED, "test_size": TEST_SIZE,
                "cv_folds": CV_FOLDS, "s_max_mb": S_MAX, "lambda": LAMBDA, "space": SPACE,
                "n_raw": n_raw, "n_dedup": int(len(X)), "sklearn_defaults": defaults},
-              open(out / "config.json", "w"), indent=2, default=str)
+              indent=2, default=str))
     print(summary.round(4).to_string())
 
 
