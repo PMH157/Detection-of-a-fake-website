@@ -98,7 +98,10 @@ def learning_curves(Xtr, ytr, final):
     df = pd.DataFrame(rows)
     df.to_csv(RESULTS / "overfitting_learning_curve.csv", index=False)
     print(df.round(4).to_string(index=False))
+    plot_learning_curve(df)
 
+
+def plot_learning_curve(df):
     plt = plots.plt
     fig, axes = plt.subplots(1, 2, figsize=(8.5, 3.6), sharey=True)
     for ax, (name, color) in zip(axes, (("Default", plots.COLORS["Default"]), ("Chosen (OFAT V10)", plots.COLORS["TPE"]))):
@@ -136,6 +139,10 @@ def leakage(Xtr, Xte, ytr, yte):
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:2] == ["--replot"]:  # redraw the learning curve from the saved CSV only
+        plot_learning_curve(pd.read_csv(RESULTS / "overfitting_learning_curve.csv"))
+        sys.exit()
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     warnings.filterwarnings("ignore", message=".*sklearn.utils.parallel.delayed.*")
     X, y, _ = load_data()

@@ -20,6 +20,7 @@ plt.rcParams.update({
     "axes.labelcolor": INK, "xtick.color": MUTED, "ytick.color": MUTED, "text.color": INK,
     "axes.spines.top": False, "axes.spines.right": False, "axes.grid": True,
     "grid.color": "#e6e5e1", "grid.linewidth": 0.6, "font.size": 10, "lines.linewidth": 2,
+    "font.family": "serif", "font.serif": ["Times New Roman", "Liberation Serif", "DejaVu Serif"],  # match the report
 })
 
 
