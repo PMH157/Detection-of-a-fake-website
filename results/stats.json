@@ -1,14 +1,14 @@
 {
-  "wilcoxon_p_J": 0.0078125,
-  "wilcoxon_p_test_f1": 0.1640625,
-  "Random_evals_to_J>=0.94": {
-    "mean": 17.5,
-    "reached_seeds": 8,
+  "wilcoxon_p_J": 0.001953125,
+  "wilcoxon_p_test_f1": 0.4921875,
+  "Random_evals_to_J>=0.9459": {
+    "mean": 27.6,
+    "reached_seeds": 5,
     "of_seeds": 10
   },
-  "TPE_evals_to_J>=0.94": {
-    "mean": 10.3,
-    "reached_seeds": 10,
+  "TPE_evals_to_J>=0.9459": {
+    "mean": 17.333333333333332,
+    "reached_seeds": 9,
     "of_seeds": 10
   }
 }
