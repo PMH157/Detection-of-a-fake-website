@@ -1,8 +1,0 @@
-{
-  "test_rows": 1170,
-  "test_features_seen_in_train": 24,
-  "test_features_seen_in_train_rate": 0.020512820512820513,
-  "feature_vectors_with_conflicting_labels": 64,
-  "rows_in_conflicting_groups": 128,
-  "shared_with_same_label": 0
-}
