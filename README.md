@@ -34,8 +34,6 @@ x* = argmax  F1_cv(x),   x ∈ Ω
 - **Trade-off**: không giới hạn dung lượng (đã chấp nhận), nhưng dung lượng mô hình và thời gian dự đoán được đo và báo cáo ở mọi bước.
 - F1_cv là **hàm hộp đen**: không có đạo hàm, tốn kém, có nhiễu → giải bằng tìm kiếm có ngân sách.
 
-> Phiên bản trước của đồ án có thêm ràng buộc dung lượng ≤ 1 MB; kết quả đó được lưu trữ ở `results_trial/budget_1mb/` và không dùng cho quyết định cuối.
-
 ## Dataset
 
 [UCI Phishing Websites (id 327)](https://doi.org/10.24432/C51W2X), Mohammad, Thabtah & McCluskey (2012), CC BY 4.0. 30 đặc trưng đã mã hóa {-1, 0, 1} (URL, tên miền, SSL, HTML/JS...).
@@ -182,14 +180,3 @@ python src/try_config.py --n-estimators 50 --max-depth 15
 ├─ data/README.md         # nguồn, giấy phép, tiền xử lý
 └─ docs/de-cuong.md       # phiếu đăng ký đề + kế hoạch 5 tuần
 ```
-
-## Limitations
-
-- **Test F1 không tăng có ý nghĩa thống kê** so với RF mặc định (+0.0009, p = 0.51); cải thiện chủ yếu nằm trên CV.
-- Mô hình cuối lớn (34 MB) và chậm hơn mặc định ~3 lần — không phù hợp nếu triển khai trên thiết bị hạn chế.
-- Coordinate search phụ thuộc thứ tự siêu tham số và chỉ đi một lượt; không bắt được tương tác giữa các siêu tham số; lưới giá trị thô (2–10 mức).
-- Một bộ dữ liệu với đặc trưng mã hóa sẵn từ 2012; latency đo trên một máy.
-
-## AI assistance
-
-Code khung, README và bản nháp báo cáo được soạn với sự hỗ trợ của Claude Code. Sinh viên tự chạy lại toàn bộ thí nghiệm, kiểm tra số liệu với `results/` và chịu trách nhiệm giải thích mọi phần.
