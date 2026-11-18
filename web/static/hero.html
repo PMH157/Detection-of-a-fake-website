@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 2px 6px 28px; font-family: "Source Sans Pro", "Segoe UI", system-ui, sans-serif; background: transparent; }
+  .hero { position: relative; overflow: hidden; height: 160px; padding: 26px 30px; border-radius: 22px;
+          background: linear-gradient(120deg, #e0f2fe 0%, #f0fdf4 55%, #fefce8 100%);
+          border: 1px solid #dbeafe; box-shadow: 0 12px 30px rgba(37, 99, 235, 0.10); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .content { position: relative; display: flex; align-items: center; gap: 22px; }
+  .shield { flex: none; width: 74px; height: 74px; animation: float 4s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-6px); } }
+  h1 { margin: 0 0 16px; font-size: 30px; color: #0f2a4a; letter-spacing: -0.3px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { background: rgba(255, 255, 255, 0.9); border: 1px solid #e2e8f0; border-radius: 999px;
+          padding: 5px 14px; font-size: 14px; color: #475569; box-shadow: 0 3px 10px rgba(15, 42, 74, 0.05); }
+  .chip b { color: #2563eb; font-size: 15px; }
+  @media (max-width: 640px) { .shield { display: none; } h1 { font-size: 24px; } .hero { height: auto; } }
+</style>
+</head>
+<body>
+<div class="hero">
+  <canvas id="bg"></canvas>
+  <div class="content">
+    <svg class="shield" viewBox="0 0 64 64" aria-hidden="true">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#34d399"/></linearGradient></defs>
+      <path d="M32 4 8 13v17c0 15 10 26 24 30 14-4 24-15 24-30V13L32 4Z" fill="url(#g)"/>
+      <path d="m21 32 8 8 15-16" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <h1>Phát hiện website giả mạo</h1>
+      <div class="chips">
+        <span class="chip">F1 test <b data-to="__F1__" data-dec="4">0</b></span>
+        <span class="chip"><b data-to="__N__" data-dec="0">0</b> website trong dữ liệu</span>
+        <span class="chip"><b data-to="30" data-dec="0">0</b> đặc trưng</span>
+        <span class="chip"><b data-to="300" data-dec="0">0</b> cây quyết định</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // số liệu đếm tăng dần
+  document.querySelectorAll("[data-to]").forEach(el => {
+    const to = parseFloat(el.dataset.to), dec = +el.dataset.dec, t0 = performance.now();
+    (function step(now) {
+      const k = Math.min(1, (now - t0) / 1200), v = to * (1 - Math.pow(1 - k, 3));
+      el.textContent = dec ? v.toFixed(dec) : Math.round(v).toLocaleString("vi-VN");
+      if (k < 1) requestAnimationFrame(step);
+    })(t0);
+  });
+
+  // bong bóng pastel trôi nhẹ trên nền
+  const cv = document.getElementById("bg"), ctx = cv.getContext("2d");
+  const colors = ["#bfdbfe", "#bbf7d0", "#fde68a", "#c7d2fe", "#a5f3fc"];
+  let W, H, dots;
+  function resize() {
+    W = cv.width = cv.offsetWidth * devicePixelRatio; H = cv.height = cv.offsetHeight * devicePixelRatio;
+    dots = Array.from({ length: 16 }, (_, k) => ({ x: Math.random() * W, y: Math.random() * H,
+      r: (10 + Math.random() * 34) * devicePixelRatio, dx: (Math.random() - 0.5) * 0.35, dy: (Math.random() - 0.5) * 0.35,
+      c: colors[k % colors.length] }));
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const d of dots) {
+      d.x = (d.x + d.dx + W) % W; d.y = (d.y + d.dy + H) % H;
+      ctx.globalAlpha = 0.45; ctx.fillStyle = d.c;
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  resize(); draw(); addEventListener("resize", resize);
+</script>
+</body>
+</html>
