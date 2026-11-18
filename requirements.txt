@@ -2,6 +2,7 @@
 numpy>=1.26
 pandas>=2.1
 scikit-learn>=1.4
+scipy>=1.11  # Wilcoxon test in src/plots.py
 optuna>=3.6
 matplotlib>=3.8
 pytest>=8

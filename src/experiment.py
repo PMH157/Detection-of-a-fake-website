@@ -1,13 +1,14 @@
-"""Constrained HPO for a Random Forest phishing-website detector.
+"""Hyperparameter optimisation for a Random Forest phishing-website detector.
 
 Compares, under the same objective, data split and evaluation budget:
   - Default : sklearn RandomForestClassifier defaults (no search)
   - Random  : Random Search  (optuna.samplers.RandomSampler)
   - TPE     : Bayesian / TPE (optuna.samplers.TPESampler)
 
-Decision variables x = (n_estimators, max_depth, min_samples_leaf, max_features)
+Decision variables x = (n_estimators, max_depth, min_samples_leaf, max_features) in the box SPACE
 Objective          J(x) = F1_cv(x) - LAMBDA * max(0, size_mb(x) - S_MAX) / S_MAX   (maximize)
-Constraint         g(x) = size_mb(x) - S_MAX <= 0                                    (model size budget)
+With the default LAMBDA = 0 the objective is plain CV F1 (no size budget; size and latency are only
+reported). --lam 1 reproduces the archived study with a 1 MB budget (results_trial/budget_1mb/).
 The test set is touched only once per run, after the search has picked x*.
 """
 import argparse
@@ -35,8 +36,8 @@ RESULTS = ROOT / "results"
 SPLIT_SEED = 42      # fixed train/test split, shared by every method and seed
 TEST_SIZE = 0.2
 CV_FOLDS = 3
-S_MAX = 1.0          # model-size budget in MB (e.g. shipping the model in a browser extension)
-LAMBDA = 1.0         # penalty weight for violating the size budget
+S_MAX = 1.0          # model-size budget in MB, only used when LAMBDA > 0 (archived 1 MB study)
+LAMBDA = 0.0         # size-penalty weight: 0 = no size budget (current decision), 1 = archived 1 MB study
 
 SPACE = {  # search space Omega
     "n_estimators": (10, 300),      # int, log scale
@@ -125,7 +126,7 @@ def test_evaluate(params, Xtr, ytr, Xte, yte, seed):
     }
 
 
-def run_search(method, seed, n_trials, Xtr, ytr):
+def run_search(method, seed, n_trials, Xtr, ytr, s_max=S_MAX, lam=LAMBDA):
     sampler = (optuna.samplers.TPESampler(seed=seed, n_startup_trials=10) if method == "TPE"
                else optuna.samplers.RandomSampler(seed=seed))
     rows = []
@@ -134,9 +135,9 @@ def run_search(method, seed, n_trials, Xtr, ytr):
         params = suggest(trial)
         t = time.perf_counter()
         f1, size = cv_evaluate(params, Xtr, ytr, seed)
-        j = penalized(f1, size)
+        j = penalized(f1, size, s_max, lam)
         rows.append({"method": method, "seed": seed, "trial": trial.number, **params,
-                     "cv_f1": f1, "size_mb": size, "J": j, "feasible": size <= S_MAX,
+                     "cv_f1": f1, "size_mb": size, "J": j, "feasible": size <= s_max,
                      "eval_s": time.perf_counter() - t})
         return j
 
@@ -150,6 +151,7 @@ def main():
     ap.add_argument("--seeds", type=int, default=10, help="number of independent seeds per method")
     ap.add_argument("--trials", type=int, default=40, help="evaluation budget (trials) per search run")
     ap.add_argument("--out", default=str(RESULTS))
+    ap.add_argument("--lam", type=float, default=LAMBDA, help="size-penalty weight; 0 = no size budget")
     args = ap.parse_args()
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     # harmless sklearn/joblib version-mismatch warning emitted on every parallel predict
@@ -166,12 +168,13 @@ def main():
     for seed in range(args.seeds):
         f1, size = cv_evaluate({}, Xtr, ytr, seed)
         trials.append({"method": "Default", "seed": seed, "trial": 0, **defaults, "cv_f1": f1,
-                       "size_mb": size, "J": penalized(f1, size), "feasible": size <= S_MAX, "eval_s": np.nan})
-        finals.append({"method": "Default", "seed": seed, "cv_f1": f1, "J": penalized(f1, size),
+                       "size_mb": size, "J": penalized(f1, size, S_MAX, args.lam), "feasible": size <= S_MAX,
+                       "eval_s": np.nan})
+        finals.append({"method": "Default", "seed": seed, "cv_f1": f1, "J": penalized(f1, size, S_MAX, args.lam),
                        **defaults, **test_evaluate({}, Xtr, ytr, Xte, yte, seed)})
         for method in ("Random", "TPE"):
             t = time.perf_counter()
-            best, rows = run_search(method, seed, args.trials, Xtr, ytr)
+            best, rows = run_search(method, seed, args.trials, Xtr, ytr, S_MAX, args.lam)
             search_s = time.perf_counter() - t
             trials += rows
             br = max(rows, key=lambda r: r["J"])
@@ -187,7 +190,7 @@ def main():
     summary["feasible_rate"] = final.groupby("method", sort=False)["feasible"].mean()
     summary.to_csv(out / "summary.csv")
     (out / "config.json").write_text(json.dumps({"seeds": args.seeds, "trials": args.trials, "split_seed": SPLIT_SEED, "test_size": TEST_SIZE,
-               "cv_folds": CV_FOLDS, "s_max_mb": S_MAX, "lambda": LAMBDA, "space": SPACE,
+               "cv_folds": CV_FOLDS, "s_max_mb": S_MAX, "lambda": args.lam, "space": SPACE,
                "n_raw": n_raw, "n_dedup": int(len(X)), "sklearn_defaults": defaults},
               indent=2, default=str))
     print(summary.round(4).to_string())

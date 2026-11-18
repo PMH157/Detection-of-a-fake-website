@@ -40,11 +40,17 @@ def convergence(trials, s_max):
     ax.axvline(10.5, color=MUTED, ls=":", lw=1.2)
     ax.text(10.7, top + 0.005, "TPE starts modelling\n(trials 1–10 = same random draws)", color=MUTED, fontsize=8, va="top")
     ax.set_ylim(min(lows) - 0.006, top + 0.011)
-    ax.text(0.98, 0.97, ha="right", va="top", s=f"Default RF: CV F1 = {d0.cv_f1.mean():.4f}, size = {d0.size_mb.mean():.1f} MB\n"
-            f"→ violates S_max, J = {d0.J.mean():.2f} (off-scale)", transform=ax.transAxes,
+    if s_max is None:  # no size budget: J = CV F1, so the default RF sits on the same scale
+        ax.axhline(d0.J.mean(), color=COLORS["Default"], ls="--", lw=1.5, label=f"Default RF (CV F1 = {d0.J.mean():.4f})")
+    note = (f"Default RF: CV F1 = {d0.cv_f1.mean():.4f}, size = {d0.size_mb.mean():.1f} MB" if s_max is None else
+            f"Default RF: CV F1 = {d0.cv_f1.mean():.4f}, size = {d0.size_mb.mean():.1f} MB\n"
+            f"→ violates S_max, J = {d0.J.mean():.2f} (off-scale)")
+    ax.text(0.98, 0.97, ha="right", va="top", s=note, transform=ax.transAxes,
             color=MUTED, fontsize=9)
-    ax.set(xlabel="Evaluation (trial)", ylabel="Best J(x) so far  (CV F1 − size penalty)",
-           title=f"Convergence of the search  (size budget {s_max} MB)")
+    ax.set(xlabel="Evaluation (trial)",
+           ylabel="Best CV F1 so far" if s_max is None else "Best J(x) so far  (CV F1 − size penalty)",
+           title="Convergence of the search  (objective = CV F1, no size budget)" if s_max is None
+           else f"Convergence of the search  (size budget {s_max} MB)")
     ax.legend(frameon=False, loc="lower right")
     fig.tight_layout()
     fig.savefig(FIG / "convergence.png", dpi=150)
@@ -64,12 +70,14 @@ def tradeoff(trials, s_max):
                    marker="D" if m == "Default" else "o", label=m, zorder=3 if m == "Default" else 2)
     pf = pareto_front(trials[trials.method != "Default"])
     ax.step(pf.size_mb, pf.cv_f1, where="post", color=INK, lw=1.2, label="Pareto front (all searched x)", zorder=4)
-    ax.axvline(s_max, color=MUTED, ls=":", lw=1.5)
+    if s_max is not None:
+        ax.axvline(s_max, color=MUTED, ls=":", lw=1.5)
     ax.set_xscale("log")
     ax.set(xlabel="Model size (MB, log scale)", ylabel="CV F1 (train folds only)",
            title="Trade-off: detection quality vs model size")
     ax.set_ylim(bottom=max(ax.get_ylim()[0], trials.cv_f1.quantile(0.05) - 0.01))
-    ax.text(s_max * 1.08, ax.get_ylim()[0] + 0.002, f"S_max = {s_max} MB\n(infeasible →)", color=MUTED, fontsize=9)
+    if s_max is not None:
+        ax.text(s_max * 1.08, ax.get_ylim()[0] + 0.002, f"S_max = {s_max} MB\n(infeasible →)", color=MUTED, fontsize=9)
     ax.legend(frameon=False, loc="upper left")
     fig.tight_layout()
     fig.savefig(FIG / "tradeoff_pareto.png", dpi=150)
@@ -106,12 +114,15 @@ def stats(trials, final, threshold=0.94):
 
 def main():
     FIG.mkdir(exist_ok=True)
-    s_max = json.loads((RES / "config.json").read_text())["s_max_mb"]
+    cfg = json.loads((RES / "config.json").read_text())
+    s_max = cfg["s_max_mb"] if cfg.get("lambda", 1.0) > 0 else None  # None = no size budget
     trials, final = pd.read_csv(RES / "trials.csv"), pd.read_csv(RES / "final.csv")
     convergence(trials, s_max)
     tradeoff(trials, s_max)
     test_box(final)
-    stats(trials, final)
+    # no budget: "beat the default RF's CV F1"; with the 1 MB budget the default is infeasible, so a fixed bar
+    threshold = round(final[final.method == "Default"].J.mean(), 4) if s_max is None else 0.94
+    stats(trials, final, threshold)
     print("figures written to", FIG)
 
 
