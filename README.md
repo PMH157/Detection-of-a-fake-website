@@ -2,8 +2,6 @@
 
 Tối ưu siêu tham số Random Forest cho bài toán phát hiện website giả mạo (phishing) bằng **tìm kiếm theo từng siêu tham số một** (coordinate search / one-factor-at-a-time), so sánh với RF mặc định, Random Search và TPE (Bayesian optimization, Optuna) trên cùng dữ liệu, cùng hàm mục tiêu, cùng ngân sách đánh giá, 10 seed.
 
-> Đồ án môn *Nhập môn Tối ưu hóa* — Trường ĐH Văn Lang. Không xây web/app: chỉ dữ liệu → huấn luyện → tối ưu → đánh giá.
-
 ## Problem
 
 Random Forest là mô hình mạnh cho dữ liệu bảng như đặc trưng URL/tên miền, nhưng chất lượng phụ thuộc vào nhiều siêu tham số mà thư viện để mặc định. **Câu hỏi tối ưu:** thay lần lượt từng siêu tham số so với cấu hình mặc định thì F1 phát hiện website giả tăng được bao nhiêu, mỗi siêu tham số đóng góp gì, và cái giá về dung lượng / thời gian dự đoán là bao nhiêu?
